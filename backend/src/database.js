@@ -113,6 +113,8 @@ async function initDatabase() {
       content TEXT NOT NULL,
       priority TEXT DEFAULT 'normal',
       pinned INTEGER DEFAULT 0,
+      attachment TEXT DEFAULT '',
+      attachment_name TEXT DEFAULT '',
       created_by INTEGER NOT NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (created_by) REFERENCES users(id)
@@ -122,34 +124,39 @@ async function initDatabase() {
   const adminResult = db.exec("SELECT id FROM users WHERE role = 'admin'");
   if (adminResult.length === 0) {
     const hashedPassword = bcrypt.hashSync('admin123', 10);
+    // id=1: Admin (top level)
     db.run(
       `INSERT INTO users (employee_id, name, email, password, department, role, position) VALUES (?, ?, ?, ?, ?, ?, ?)`,
       ['EMP001', 'Admin', 'admin@company.com', hashedPassword, 'IT', 'admin', 'ผู้ดูแลระบบ']
     );
 
-    const gmPassword = bcrypt.hashSync('md123', 10);
+    const mdPassword = bcrypt.hashSync('md123', 10);
+    // id=2: MD → reports to Admin(1)
     db.run(
-      `INSERT INTO users (employee_id, name, email, password, department, role, position) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      ['EMP002', 'ประสิทธิ์ ผู้บริหาร', 'prasit@company.com', gmPassword, 'Management', 'md', 'Managing Director']
+      `INSERT INTO users (employee_id, name, email, password, department, role, manager_id, position) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      ['EMP002', 'ประสิทธิ์ ผู้บริหาร', 'prasit@company.com', mdPassword, 'Management', 'md', 1, 'Managing Director']
     );
 
     const mgrPassword = bcrypt.hashSync('manager123', 10);
+    // id=3: Manager → reports to MD(2)
     db.run(
       `INSERT INTO users (employee_id, name, email, password, department, role, manager_id, position) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      ['EMP003', 'วิชัย หัวหน้า', 'wichai@company.com', mgrPassword, 'Engineering', 'manager', 2, 'หัวหน้าแผนก']
+      ['EMP003', 'วิชัย หัวหน้า', 'wichai@company.com', mgrPassword, 'Engineering', 'manager', 2, 'ผู้จัดการแผนก']
     );
 
+    // id=4: Manager → reports to MD(2)
     db.run(
       `INSERT INTO users (employee_id, name, email, password, department, role, manager_id, position) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      ['EMP004', 'สุดา ผู้จัดการ', 'suda@company.com', mgrPassword, 'HR', 'manager', 2, 'ผู้จัดการฝ่าย']
+      ['EMP004', 'สุดา ผู้จัดการ', 'suda@company.com', mgrPassword, 'HR', 'manager', 2, 'ผู้จัดการฝ่าย HR']
     );
 
     const empPassword = bcrypt.hashSync('password123', 10);
-    // Employees under manager EMP003 (id=3)
+    // id=5: Employee → reports to Manager(3) → chain: Manager(3) → MD(2) → Admin(1)
     db.run(
       `INSERT INTO users (employee_id, name, email, password, department, role, manager_id, position) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       ['EMP005', 'สมชาย ใจดี', 'somchai@company.com', empPassword, 'Engineering', 'employee', 3, 'วิศวกร']
     );
+    // id=6: Employee → reports to Manager(4) → chain: Manager(4) → MD(2) → Admin(1)
     db.run(
       `INSERT INTO users (employee_id, name, email, password, department, role, manager_id, position) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       ['EMP006', 'สมหญิง รักงาน', 'somying@company.com', empPassword, 'HR', 'employee', 4, 'เจ้าหน้าที่ HR']

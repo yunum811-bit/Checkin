@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import api from '../api';
 import Toast from '../components/Toast';
 import { useAuth } from '../context/AuthContext';
-import { Megaphone, Plus, X, Pin, Edit2, Trash2, AlertTriangle, Info, Bell } from 'lucide-react';
+import { Megaphone, Plus, X, Pin, Edit2, Trash2, AlertTriangle, Info, Bell, Paperclip, FileText, Download } from 'lucide-react';
 
 interface Announcement {
   id: number;
@@ -10,6 +10,8 @@ interface Announcement {
   content: string;
   priority: string;
   pinned: number;
+  attachment: string;
+  attachment_name: string;
   created_by: number;
   author_name: string;
   created_at: string;
@@ -17,6 +19,7 @@ interface Announcement {
 
 export default function Announcements() {
   const { user } = useAuth();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -28,9 +31,11 @@ export default function Announcements() {
   const [content, setContent] = useState('');
   const [priority, setPriority] = useState('normal');
   const [pinned, setPinned] = useState(false);
+  const [attachmentData, setAttachmentData] = useState<string>('');
+  const [attachmentName, setAttachmentName] = useState<string>('');
   const [submitting, setSubmitting] = useState(false);
 
-  const canCreate = user?.role === 'admin' || user?.role === 'manager';
+  const canCreate = user?.role === 'admin' || user?.role === 'manager' || user?.role === 'md';
 
   useEffect(() => {
     fetchAnnouncements();
@@ -52,19 +57,50 @@ export default function Announcements() {
     setContent('');
     setPriority('normal');
     setPinned(false);
+    setAttachmentData('');
+    setAttachmentName('');
     setEditingId(null);
     setShowForm(false);
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 10 * 1024 * 1024) {
+      setToast({ message: 'ไฟล์ต้องมีขนาดไม่เกิน 10MB', type: 'error' });
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setAttachmentData(event.target?.result as string);
+      setAttachmentName(file.name);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const removeAttachment = () => {
+    setAttachmentData('');
+    setAttachmentName('');
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
     try {
+      const payload: any = { title, content, priority, pinned };
+      if (attachmentData) {
+        payload.attachment = attachmentData;
+        payload.attachment_name = attachmentName;
+      }
+
       if (editingId) {
-        await api.put(`/announcements/${editingId}`, { title, content, priority, pinned });
+        await api.put(`/announcements/${editingId}`, payload);
         setToast({ message: 'อัปเดตประกาศสำเร็จ', type: 'success' });
       } else {
-        await api.post('/announcements', { title, content, priority, pinned });
+        await api.post('/announcements', payload);
         setToast({ message: 'สร้างประกาศสำเร็จ', type: 'success' });
       }
       resetForm();
@@ -81,6 +117,8 @@ export default function Announcements() {
     setContent(a.content);
     setPriority(a.priority);
     setPinned(!!a.pinned);
+    setAttachmentData('');
+    setAttachmentName(a.attachment_name || '');
     setEditingId(a.id);
     setShowForm(true);
   };
@@ -115,6 +153,15 @@ export default function Announcements() {
     return date.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' });
   };
 
+  const getFileIcon = (name: string) => {
+    const ext = name.split('.').pop()?.toLowerCase();
+    if (['jpg', 'jpeg', 'png', 'gif'].includes(ext || '')) return '🖼️';
+    if (ext === 'pdf') return '📄';
+    if (['doc', 'docx'].includes(ext || '')) return '📝';
+    if (['xls', 'xlsx'].includes(ext || '')) return '📊';
+    return '📎';
+  };
+
   return (
     <div className="page page-content">
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
@@ -145,24 +192,12 @@ export default function Announcements() {
 
             <div className="input-group">
               <label>หัวข้อ</label>
-              <input
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="หัวข้อประกาศ"
-                required
-              />
+              <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="หัวข้อประกาศ" required />
             </div>
 
             <div className="input-group">
               <label>เนื้อหา</label>
-              <textarea
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
-                placeholder="รายละเอียดประกาศ..."
-                rows={4}
-                required
-                style={{ resize: 'vertical' }}
-              />
+              <textarea value={content} onChange={(e) => setContent(e.target.value)} placeholder="รายละเอียดประกาศ..." rows={4} required style={{ resize: 'vertical' }} />
             </div>
 
             <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
@@ -176,15 +211,41 @@ export default function Announcements() {
               </div>
               <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: '4px' }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '0.85rem' }}>
-                  <input
-                    type="checkbox"
-                    checked={pinned}
-                    onChange={(e) => setPinned(e.target.checked)}
-                    style={{ width: '18px', height: '18px', accentColor: 'var(--primary)' }}
-                  />
+                  <input type="checkbox" checked={pinned} onChange={(e) => setPinned(e.target.checked)} style={{ width: '18px', height: '18px', accentColor: 'var(--primary)' }} />
                   <Pin size={14} /> ปักหมุด
                 </label>
               </div>
+            </div>
+
+            {/* Attachment */}
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '600', color: 'var(--gray-600)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                แนบไฟล์
+              </label>
+              {attachmentName ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', background: 'var(--gray-50)', borderRadius: '10px', border: '1px solid var(--gray-200)' }}>
+                  <FileText size={18} color="var(--primary)" />
+                  <span style={{ flex: 1, fontSize: '0.85rem', fontWeight: '500' }}>{attachmentName}</span>
+                  <button type="button" onClick={removeAttachment} style={{ background: 'none', color: 'var(--danger)', padding: '4px' }}>
+                    <X size={16} />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  style={{
+                    width: '100%', padding: '14px', border: '2px dashed var(--gray-300)',
+                    borderRadius: '10px', background: 'var(--gray-50)', color: 'var(--gray-500)',
+                    fontSize: '0.85rem', fontWeight: '500', display: 'flex', alignItems: 'center',
+                    justifyContent: 'center', gap: '8px', cursor: 'pointer'
+                  }}
+                >
+                  <Paperclip size={16} />
+                  เลือกไฟล์แนบ (PDF, รูปภาพ, Word, Excel ไม่เกิน 10MB)
+                </button>
+              )}
+              <input ref={fileInputRef} type="file" accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx,.xls,.xlsx,.txt" onChange={handleFileSelect} style={{ display: 'none' }} />
             </div>
 
             <button type="submit" className="btn btn-success" disabled={submitting}>
@@ -218,7 +279,6 @@ export default function Announcements() {
                       {a.title}
                     </span>
                   </div>
-                  {/* Actions */}
                   {(user?.role === 'admin' || a.created_by === user?.id) && (
                     <div style={{ display: 'flex', gap: '4px' }}>
                       <button onClick={() => handleEdit(a)} style={{ background: 'none', padding: '4px', color: 'var(--primary)' }}>
@@ -235,6 +295,48 @@ export default function Announcements() {
                 <div style={{ fontSize: '0.85rem', color: 'var(--gray-700)', lineHeight: 1.6, whiteSpace: 'pre-wrap', marginBottom: '10px' }}>
                   {a.content}
                 </div>
+
+                {/* Attachment */}
+                {a.attachment && (
+                  <div style={{ marginBottom: '10px' }}>
+                    {/* Image preview */}
+                    {['jpg','jpeg','png','gif'].includes(a.attachment_name?.split('.').pop()?.toLowerCase() || '') ? (
+                      <div>
+                        <img
+                          src={`/api/announcements/attachment/${a.attachment}`}
+                          alt={a.attachment_name}
+                          style={{ width: '100%', maxHeight: '300px', objectFit: 'contain', borderRadius: '8px', marginBottom: '8px', background: 'var(--gray-100)' }}
+                        />
+                        <a
+                          href={`/api/announcements/attachment/${a.attachment}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ fontSize: '0.75rem', color: 'var(--primary)', fontWeight: '600' }}
+                        >
+                          <Download size={12} style={{ verticalAlign: 'middle', marginRight: '4px' }} />
+                          ดาวน์โหลด {a.attachment_name}
+                        </a>
+                      </div>
+                    ) : (
+                      <a
+                        href={`/api/announcements/attachment/${a.attachment}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: '8px',
+                          padding: '10px 14px', background: 'var(--gray-50)',
+                          borderRadius: '8px', border: '1px solid var(--gray-200)',
+                          fontSize: '0.8rem', color: 'var(--primary)',
+                          fontWeight: '600', textDecoration: 'none'
+                        }}
+                      >
+                        <span>{getFileIcon(a.attachment_name)}</span>
+                        <span style={{ flex: 1 }}>{a.attachment_name}</span>
+                        <Download size={14} />
+                      </a>
+                    )}
+                  </div>
+                )}
 
                 {/* Footer */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.7rem', color: 'var(--gray-400)' }}>

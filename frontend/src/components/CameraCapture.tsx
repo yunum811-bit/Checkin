@@ -1,5 +1,5 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
-import { Camera, RotateCcw, Check, X, Image } from 'lucide-react';
+import { Camera, RotateCcw, Check, X } from 'lucide-react';
 
 interface CameraCaptureProps {
   onCapture: (photoBase64: string) => void;
@@ -9,7 +9,6 @@ interface CameraCaptureProps {
 export default function CameraCapture({ onCapture, onCancel }: CameraCaptureProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
   const [error, setError] = useState<string>('');
@@ -18,7 +17,6 @@ export default function CameraCapture({ onCapture, onCancel }: CameraCaptureProp
 
   const startCamera = useCallback(async () => {
     try {
-      // Stop existing stream
       if (stream) {
         stream.getTracks().forEach(track => track.stop());
       }
@@ -42,14 +40,13 @@ export default function CameraCapture({ onCapture, onCancel }: CameraCaptureProp
       console.error('Camera error:', err);
       setCameraReady(false);
       if (err.name === 'NotAllowedError') {
-        setError('กรุณาอนุญาตการเข้าถึงกล้อง หรือเลือกรูปจากแกลเลอรี');
+        setError('กรุณาอนุญาตการเข้าถึงกล้องในการตั้งค่า browser');
       } else if (err.name === 'NotFoundError') {
-        setError('ไม่พบกล้อง กรุณาเลือกรูปจากแกลเลอรี');
+        setError('ไม่พบกล้องบนอุปกรณ์นี้');
       } else if (err.name === 'NotReadableError' || err.name === 'AbortError') {
-        setError('กล้องถูกใช้งานอยู่ กรุณาเลือกรูปจากแกลเลอรี');
+        setError('กล้องถูกใช้งานอยู่ กรุณาปิดแอปอื่นที่ใช้กล้อง');
       } else {
-        // On HTTP (non-HTTPS), camera is blocked
-        setError('ไม่สามารถเปิดกล้องได้ (ต้องใช้ HTTPS) กรุณาเลือกรูปจากแกลเลอรี');
+        setError('ไม่สามารถเปิดกล้องได้ กรุณาใช้ HTTPS หรืออนุญาตการเข้าถึงกล้อง');
       }
     }
   }, [facingMode]);
@@ -84,67 +81,17 @@ export default function CameraCapture({ onCapture, onCancel }: CameraCaptureProp
     
     // Add timestamp watermark
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-    ctx.fillRect(0, canvas.height - 36, canvas.width, 36);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+    ctx.fillRect(0, canvas.height - 40, canvas.width, 40);
     ctx.fillStyle = 'white';
-    ctx.font = '14px Inter, sans-serif';
+    ctx.font = 'bold 14px Inter, sans-serif';
     ctx.fillText(
-      new Date().toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'medium' }),
-      10, canvas.height - 12
+      '📍 ' + new Date().toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'medium' }),
+      10, canvas.height - 14
     );
 
     const photoData = canvas.toDataURL('image/jpeg', 0.7);
     setCapturedPhoto(photoData);
-  };
-
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const img = new window.Image();
-      img.onload = () => {
-        const canvas = canvasRef.current;
-        if (!canvas) return;
-
-        // Resize to max 640px
-        const maxSize = 640;
-        let width = img.width;
-        let height = img.height;
-        if (width > maxSize || height > maxSize) {
-          if (width > height) {
-            height = (height / width) * maxSize;
-            width = maxSize;
-          } else {
-            width = (width / height) * maxSize;
-            height = maxSize;
-          }
-        }
-
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
-
-        ctx.drawImage(img, 0, 0, width, height);
-
-        // Add timestamp watermark
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-        ctx.fillRect(0, height - 36, width, 36);
-        ctx.fillStyle = 'white';
-        ctx.font = '14px Inter, sans-serif';
-        ctx.fillText(
-          new Date().toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'medium' }),
-          10, height - 12
-        );
-
-        const photoData = canvas.toDataURL('image/jpeg', 0.7);
-        setCapturedPhoto(photoData);
-      };
-      img.src = event.target?.result as string;
-    };
-    reader.readAsDataURL(file);
   };
 
   const retake = () => {
@@ -219,18 +166,16 @@ export default function CameraCapture({ onCapture, onCancel }: CameraCaptureProp
             <div style={{ fontSize: '4rem', marginBottom: '16px' }}>📷</div>
             <p style={{ marginBottom: '20px', fontSize: '0.9rem', lineHeight: 1.6, opacity: 0.8 }}>{error}</p>
             <button 
-              onClick={() => fileInputRef.current?.click()} 
+              onClick={startCamera} 
               style={{ 
                 padding: '14px 28px', background: 'var(--primary-gradient)', color: 'white', 
-                borderRadius: '12px', fontWeight: '700', fontSize: '0.95rem',
-                boxShadow: '0 8px 24px rgba(99, 102, 241, 0.4)'
+                borderRadius: '12px', fontWeight: '700', fontSize: '0.95rem'
               }}
             >
-              <Image size={20} style={{ verticalAlign: 'middle', marginRight: '8px' }} />
-              เลือกรูปจากแกลเลอรี
+              ลองเปิดกล้องอีกครั้ง
             </button>
             <p style={{ marginTop: '16px', fontSize: '0.75rem', opacity: 0.5 }}>
-              หรือถ่ายรูปจากแอปกล้องแล้วเลือกรูป
+              * ต้องถ่ายรูปจากกล้องเท่านั้น ไม่สามารถใช้รูปจากแกลเลอรีได้
             </p>
           </div>
         )}
@@ -260,41 +205,17 @@ export default function CameraCapture({ onCapture, onCancel }: CameraCaptureProp
               <Check size={32} />
             </button>
           </>
-        ) : (
-          <>
-            {/* Gallery button */}
-            <button onClick={() => fileInputRef.current?.click()} style={{ 
-              width: '48px', height: '48px', borderRadius: '50%', 
-              background: 'rgba(255,255,255,0.15)', color: 'white',
-              display: 'flex', alignItems: 'center', justifyContent: 'center'
-            }}>
-              <Image size={22} />
-            </button>
-
-            {/* Shutter button (only if camera is ready) */}
-            {cameraReady && (
-              <button onClick={takePhoto} style={{ 
-                width: '70px', height: '70px', borderRadius: '50%', 
-                background: 'white', border: '4px solid rgba(255,255,255,0.3)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                boxShadow: '0 4px 20px rgba(0,0,0,0.3)'
-              }}>
-                <Camera size={28} color="#333" />
-              </button>
-            )}
-          </>
-        )}
+        ) : cameraReady ? (
+          <button onClick={takePhoto} style={{ 
+            width: '70px', height: '70px', borderRadius: '50%', 
+            background: 'white', border: '4px solid rgba(255,255,255,0.3)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.3)'
+          }}>
+            <Camera size={28} color="#333" />
+          </button>
+        ) : null}
       </div>
-
-      {/* Hidden file input for gallery */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        capture="user"
-        onChange={handleFileSelect}
-        style={{ display: 'none' }}
-      />
 
       {/* Hidden canvas for processing */}
       <canvas ref={canvasRef} style={{ display: 'none' }} />

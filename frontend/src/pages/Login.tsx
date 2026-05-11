@@ -42,7 +42,7 @@ export default function Login() {
     <div className="page" style={{ 
       minHeight: '100vh', display: 'flex', flexDirection: 'column', 
       justifyContent: 'center', padding: '24px',
-      background: 'linear-gradient(160deg, #F0FDF4 0%, #FEFCE8 40%, #F7FEE7 70%, #ECFDF5 100%)'
+      background: 'linear-gradient(180deg, #E8F5E9 0%, #F1F8E9 20%, #F9FBE7 40%, #FFFDE7 60%, #FFF9C4 80%, #FFF59D 100%)'
     }}>
       {/* Logo & Title */}
       <div style={{ textAlign: 'center', marginBottom: '36px' }}>

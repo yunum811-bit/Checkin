@@ -50,7 +50,14 @@
 
 body {
   font-family: 'Inter', 'Noto Sans Thai', -apple-system, BlinkMacSystemFont, sans-serif;
-  background: linear-gradient(160deg, #F0FDF4 0%, #FEFCE8 40%, #F7FEE7 70%, #ECFDF5 100%);
+  background: linear-gradient(180deg, 
+    #E8F5E9 0%, 
+    #F1F8E9 20%, 
+    #F9FBE7 40%, 
+    #FFFDE7 60%, 
+    #FFF9C4 80%, 
+    #FFF59D 100%
+  );
   background-attachment: fixed;
   color: var(--gray-800);
   min-height: 100vh;

@@ -4,12 +4,10 @@ const { authenticateToken, requireManagerOrAdmin } = require('../middleware/auth
 
 const router = express.Router();
 
-// Approval level hierarchy:
-// Level 1: Manager (direct supervisor)
-// Level 2: MD (Managing Director)
-// Level 3: Admin (final approval)
-// If user has no manager, goes to MD then Admin
-// If user is Manager, goes to MD then Admin
+// Approval level hierarchy (unlimited levels):
+// ไล่ตาม manager_id ขึ้นไปเรื่อยๆ จนถึง Admin
+// เช่น: Employee → Supervisor → Manager → Director → MD → Admin
+// ระบบจะสร้าง chain อัตโนมัติตามโครงสร้างองค์กรที่กำหนดไว้
 
 function getApprovalChain(userId) {
   const user = queryGet('SELECT * FROM users WHERE id = ?', [userId]);
@@ -17,31 +15,45 @@ function getApprovalChain(userId) {
 
   const chain = [];
   const addedIds = new Set();
+  addedIds.add(userId); // Don't add self
 
-  // Level 1: Direct manager (if exists and is not MD/Admin)
-  if (user.manager_id) {
-    const manager = queryGet('SELECT id, name, role FROM users WHERE id = ?', [user.manager_id]);
-    if (manager && !addedIds.has(manager.id)) {
-      chain.push({ level: chain.length + 1, approver_id: manager.id, approver_name: manager.name, role: manager.role });
-      addedIds.add(manager.id);
-    }
+  // Walk up the manager chain
+  let currentId = user.manager_id;
+  const maxLevels = 10; // Safety limit to prevent infinite loops
+
+  while (currentId && chain.length < maxLevels) {
+    if (addedIds.has(currentId)) break; // Prevent circular reference
+
+    const superior = queryGet('SELECT id, name, role FROM users WHERE id = ?', [currentId]);
+    if (!superior) break;
+
+    chain.push({
+      level: chain.length + 1,
+      approver_id: superior.id,
+      approver_name: superior.name,
+      role: superior.role
+    });
+    addedIds.add(superior.id);
+
+    // If we reached admin, stop here
+    if (superior.role === 'admin') break;
+
+    // Move up to next manager
+    const superiorFull = queryGet('SELECT manager_id FROM users WHERE id = ?', [superior.id]);
+    currentId = superiorFull?.manager_id || null;
   }
 
-  // Next: MD (if not already in chain and user is not MD themselves)
-  if (user.role !== 'md' && user.role !== 'admin') {
-    const gm = queryGet("SELECT id, name, role FROM users WHERE role = 'md' AND id != ?", [userId]);
-    if (gm && !addedIds.has(gm.id)) {
-      chain.push({ level: chain.length + 1, approver_id: gm.id, approver_name: gm.name, role: 'md' });
-      addedIds.add(gm.id);
-    }
-  }
-
-  // Final: Admin (if not already in chain)
-  if (user.role !== 'admin') {
+  // If chain doesn't end with admin, add admin as final approver
+  const lastInChain = chain[chain.length - 1];
+  if (!lastInChain || lastInChain.role !== 'admin') {
     const admin = queryGet("SELECT id, name, role FROM users WHERE role = 'admin' AND id != ?", [userId]);
     if (admin && !addedIds.has(admin.id)) {
-      chain.push({ level: chain.length + 1, approver_id: admin.id, approver_name: admin.name, role: 'admin' });
-      addedIds.add(admin.id);
+      chain.push({
+        level: chain.length + 1,
+        approver_id: admin.id,
+        approver_name: admin.name,
+        role: 'admin'
+      });
     }
   }
 
