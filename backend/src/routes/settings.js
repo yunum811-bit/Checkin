@@ -1,7 +1,7 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
-const { queryGet, queryRun } = require('../database');
+const { queryGet, queryAll, queryRun } = require('../database');
 const { authenticateToken, requireAdmin } = require('../middleware/auth');
 
 const router = express.Router();
@@ -115,6 +115,74 @@ router.get('/logo/:filename', (req, res) => {
     res.sendFile(filePath);
   } else {
     res.status(404).json({ error: 'ไม่พบโลโก้' });
+  }
+});
+
+// ===== Leave Quotas Management =====
+
+// Get all leave quotas (public)
+router.get('/leave-quotas', (req, res) => {
+  try {
+    const quotas = queryAll('SELECT * FROM leave_quotas ORDER BY id');
+    res.json(quotas);
+  } catch (err) {
+    res.status(500).json({ error: 'เกิดข้อผิดพลาด: ' + err.message });
+  }
+});
+
+// Update leave quota (admin)
+router.put('/leave-quotas/:id', authenticateToken, requireAdmin, (req, res) => {
+  try {
+    const { leave_name, max_days, enabled } = req.body;
+    const quota = queryGet('SELECT * FROM leave_quotas WHERE id = ?', [parseInt(req.params.id)]);
+    if (!quota) {
+      return res.status(404).json({ error: 'ไม่พบประเภทการลา' });
+    }
+
+    queryRun(
+      'UPDATE leave_quotas SET leave_name = ?, max_days = ?, enabled = ? WHERE id = ?',
+      [leave_name || quota.leave_name, max_days !== undefined ? max_days : quota.max_days, enabled !== undefined ? (enabled ? 1 : 0) : quota.enabled, parseInt(req.params.id)]
+    );
+
+    const updated = queryGet('SELECT * FROM leave_quotas WHERE id = ?', [parseInt(req.params.id)]);
+    res.json({ message: 'อัปเดตสำเร็จ', quota: updated });
+  } catch (err) {
+    res.status(500).json({ error: 'เกิดข้อผิดพลาด: ' + err.message });
+  }
+});
+
+// Add new leave type (admin)
+router.post('/leave-quotas', authenticateToken, requireAdmin, (req, res) => {
+  try {
+    const { leave_type, leave_name, max_days } = req.body;
+    if (!leave_type || !leave_name || max_days === undefined) {
+      return res.status(400).json({ error: 'กรุณากรอกข้อมูลให้ครบ' });
+    }
+
+    const existing = queryGet('SELECT * FROM leave_quotas WHERE leave_type = ?', [leave_type]);
+    if (existing) {
+      return res.status(400).json({ error: 'ประเภทการลานี้มีอยู่แล้ว' });
+    }
+
+    const result = queryRun(
+      'INSERT INTO leave_quotas (leave_type, leave_name, max_days, enabled) VALUES (?, ?, ?, 1)',
+      [leave_type, leave_name, max_days]
+    );
+
+    const quota = queryGet('SELECT * FROM leave_quotas WHERE id = ?', [result.lastInsertRowid]);
+    res.status(201).json({ message: 'เพิ่มประเภทการลาสำเร็จ', quota });
+  } catch (err) {
+    res.status(500).json({ error: 'เกิดข้อผิดพลาด: ' + err.message });
+  }
+});
+
+// Delete leave type (admin)
+router.delete('/leave-quotas/:id', authenticateToken, requireAdmin, (req, res) => {
+  try {
+    queryRun('DELETE FROM leave_quotas WHERE id = ?', [parseInt(req.params.id)]);
+    res.json({ message: 'ลบประเภทการลาสำเร็จ' });
+  } catch (err) {
+    res.status(500).json({ error: 'เกิดข้อผิดพลาด: ' + err.message });
   }
 });
 

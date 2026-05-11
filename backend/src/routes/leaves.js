@@ -68,15 +68,20 @@ function getApprovalChain(userId) {
   return chain;
 }
 
-// Get leave types
+// Get leave types (from database)
 router.get('/types', authenticateToken, (req, res) => {
-  res.json([
-    { id: 'sick', name: 'ลาป่วย', max_days: 30 },
-    { id: 'personal', name: 'ลากิจ', max_days: 5 },
-    { id: 'vacation', name: 'ลาพักร้อน', max_days: 10 },
-    { id: 'maternity', name: 'ลาคลอด', max_days: 90 },
-    { id: 'other', name: 'อื่นๆ', max_days: 5 }
-  ]);
+  try {
+    const quotas = queryAll("SELECT leave_type as id, leave_name as name, max_days FROM leave_quotas WHERE enabled = 1 ORDER BY id");
+    res.json(quotas);
+  } catch (err) {
+    res.json([
+      { id: 'sick', name: 'ลาป่วย', max_days: 30 },
+      { id: 'personal', name: 'ลากิจ', max_days: 5 },
+      { id: 'vacation', name: 'ลาพักร้อน', max_days: 10 },
+      { id: 'maternity', name: 'ลาคลอด', max_days: 90 },
+      { id: 'other', name: 'อื่นๆ', max_days: 5 }
+    ]);
+  }
 });
 
 // Submit leave request
@@ -406,13 +411,7 @@ router.get('/balance', authenticateToken, (req, res) => {
     const year = new Date().getFullYear();
     const datePattern = `${year}%`;
 
-    const leaveTypes = [
-      { id: 'sick', name: 'ลาป่วย', max_days: 30 },
-      { id: 'personal', name: 'ลากิจ', max_days: 5 },
-      { id: 'vacation', name: 'ลาพักร้อน', max_days: 10 },
-      { id: 'maternity', name: 'ลาคลอด', max_days: 90 },
-      { id: 'other', name: 'อื่นๆ', max_days: 5 }
-    ];
+    const leaveTypes = queryAll("SELECT leave_type as id, leave_name as name, max_days FROM leave_quotas WHERE enabled = 1 ORDER BY id");
 
     const balance = leaveTypes.map(type => {
       const used = queryGet(`

@@ -3,6 +3,7 @@ import api from '../api';
 import Toast from '../components/Toast';
 import ExportButtons from '../components/ExportButtons';
 import LogoManager from '../components/LogoManager';
+import LeaveQuotaManager from '../components/LeaveQuotaManager';
 import { exportAllLeaves, exportAllAttendance } from '../utils/exportData';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -573,12 +574,17 @@ export default function Admin() {
 
         {/* ===== Settings Tab ===== */}
         {activeTab === 'settings' && (
-          <LogoManager
-            currentLogo={companySettings.logo}
-            companyName={companySettings.company_name}
-            onUpdate={fetchSettings}
-            onToast={(message, type) => setToast({ message, type })}
-          />
+          <>
+            <LogoManager
+              currentLogo={companySettings.logo}
+              companyName={companySettings.company_name}
+              onUpdate={fetchSettings}
+              onToast={(message, type) => setToast({ message, type })}
+            />
+            <LeaveQuotaManager
+              onToast={(message, type) => setToast({ message, type })}
+            />
+          </>
         )}
       </div>
     </div>

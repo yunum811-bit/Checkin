@@ -47,6 +47,7 @@ export default function Leave() {
   const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
   const [balance, setBalance] = useState<LeaveBalance[]>([]);
   const [chain, setChain] = useState<ApprovalChain[]>([]);
+  const [leaveTypes, setLeaveTypes] = useState<Array<{id: string; name: string}>>([]);
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -63,6 +64,7 @@ export default function Leave() {
     fetchLeaves();
     fetchBalance();
     fetchChain();
+    fetchLeaveTypes();
   }, []);
 
   const fetchLeaves = async () => {
@@ -91,6 +93,18 @@ export default function Leave() {
       setChain(res.data);
     } catch (err) {
       console.error('Error fetching chain:', err);
+    }
+  };
+
+  const fetchLeaveTypes = async () => {
+    try {
+      const res = await api.get('/leaves/types');
+      setLeaveTypes(res.data);
+      if (res.data.length > 0 && !leaveType) {
+        setLeaveType(res.data[0].id);
+      }
+    } catch (err) {
+      console.error('Error fetching leave types:', err);
     }
   };
 
@@ -161,13 +175,9 @@ export default function Leave() {
     }
   };
 
-  const leaveTypeNames: Record<string, string> = {
-    sick: 'ลาป่วย',
-    personal: 'ลากิจ',
-    vacation: 'ลาพักร้อน',
-    maternity: 'ลาคลอด',
-    other: 'อื่นๆ'
-  };
+  const leaveTypeNames: Record<string, string> = Object.fromEntries(
+    leaveTypes.map(t => [t.id, t.name])
+  );
 
   return (
     <div className="page page-content">
@@ -229,11 +239,9 @@ export default function Leave() {
             <div className="input-group">
               <label htmlFor="leaveType">ประเภทการลา</label>
               <select id="leaveType" value={leaveType} onChange={(e) => setLeaveType(e.target.value)}>
-                <option value="sick">ลาป่วย</option>
-                <option value="personal">ลากิจ</option>
-                <option value="vacation">ลาพักร้อน</option>
-                <option value="maternity">ลาคลอด</option>
-                <option value="other">อื่นๆ</option>
+                {leaveTypes.map(t => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
+                ))}
               </select>
             </div>
 

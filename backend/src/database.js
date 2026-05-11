@@ -105,6 +105,17 @@ async function initDatabase() {
     )
   `);
 
+  // Leave quota settings table
+  db.run(`
+    CREATE TABLE IF NOT EXISTS leave_quotas (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      leave_type TEXT NOT NULL,
+      leave_name TEXT NOT NULL,
+      max_days INTEGER NOT NULL DEFAULT 0,
+      enabled INTEGER DEFAULT 1
+    )
+  `);
+
   // Announcements table
   db.run(`
     CREATE TABLE IF NOT EXISTS announcements (
@@ -161,6 +172,16 @@ async function initDatabase() {
       `INSERT INTO users (employee_id, name, email, password, department, role, manager_id, position) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       ['EMP006', 'สมหญิง รักงาน', 'somying@company.com', empPassword, 'HR', 'employee', 4, 'เจ้าหน้าที่ HR']
     );
+  }
+
+  // Seed leave quotas if not exists
+  const quotaExists = db.exec("SELECT id FROM leave_quotas LIMIT 1");
+  if (quotaExists.length === 0) {
+    db.run(`INSERT INTO leave_quotas (leave_type, leave_name, max_days, enabled) VALUES (?, ?, ?, ?)`, ['sick', 'ลาป่วย', 30, 1]);
+    db.run(`INSERT INTO leave_quotas (leave_type, leave_name, max_days, enabled) VALUES (?, ?, ?, ?)`, ['personal', 'ลากิจ', 5, 1]);
+    db.run(`INSERT INTO leave_quotas (leave_type, leave_name, max_days, enabled) VALUES (?, ?, ?, ?)`, ['vacation', 'ลาพักร้อน', 10, 1]);
+    db.run(`INSERT INTO leave_quotas (leave_type, leave_name, max_days, enabled) VALUES (?, ?, ?, ?)`, ['maternity', 'ลาคลอด', 90, 1]);
+    db.run(`INSERT INTO leave_quotas (leave_type, leave_name, max_days, enabled) VALUES (?, ?, ?, ?)`, ['other', 'อื่นๆ', 5, 1]);
   }
 
   saveDatabase();
