@@ -6,6 +6,20 @@ const { authenticateToken } = require('../middleware/auth');
 
 const router = express.Router();
 
+// Thailand timezone helper (UTC+7)
+function getThaiNow() {
+  const now = new Date();
+  // Convert to Thailand time
+  const thaiTime = new Date(now.getTime() + (7 * 60 * 60 * 1000));
+  const date = thaiTime.toISOString().split('T')[0]; // YYYY-MM-DD
+  const hours = String(thaiTime.getUTCHours()).padStart(2, '0');
+  const minutes = String(thaiTime.getUTCMinutes()).padStart(2, '0');
+  const seconds = String(thaiTime.getUTCSeconds()).padStart(2, '0');
+  const time = `${hours}:${minutes}:${seconds}`;
+  const hour = thaiTime.getUTCHours();
+  return { date, time, hour };
+}
+
 // Ensure uploads directory exists
 const uploadsDir = path.join(__dirname, '..', '..', 'uploads', 'photos');
 if (!fs.existsSync(uploadsDir)) {
@@ -47,7 +61,7 @@ function savePhoto(base64Data, userId, type) {
 // Get today's attendance status
 router.get('/today', authenticateToken, (req, res) => {
   try {
-    const today = new Date().toISOString().split('T')[0];
+    const { date: today } = getThaiNow();
     const record = queryGet('SELECT * FROM attendance WHERE user_id = ? AND date = ?', [req.user.id, today]);
     res.json(record || { checked_in: false });
   } catch (err) {
@@ -58,8 +72,7 @@ router.get('/today', authenticateToken, (req, res) => {
 // Check-in (with photo)
 router.post('/checkin', authenticateToken, (req, res) => {
   try {
-    const today = new Date().toISOString().split('T')[0];
-    const now = new Date().toLocaleTimeString('th-TH', { hour12: false });
+    const { date: today, time: now, hour } = getThaiNow();
     const { location, note, photo } = req.body;
 
     // Check if already checked in today
@@ -72,7 +85,6 @@ router.post('/checkin', authenticateToken, (req, res) => {
     const photoFilename = savePhoto(photo, req.user.id, 'checkin');
 
     // Determine status based on time (late if after 9:00)
-    const hour = new Date().getHours();
     const status = hour >= 9 ? 'late' : 'present';
 
     if (existing) {
@@ -97,8 +109,7 @@ router.post('/checkin', authenticateToken, (req, res) => {
 // Check-out (with photo)
 router.post('/checkout', authenticateToken, (req, res) => {
   try {
-    const today = new Date().toISOString().split('T')[0];
-    const now = new Date().toLocaleTimeString('th-TH', { hour12: false });
+    const { date: today, time: now } = getThaiNow();
     const { location, note, photo } = req.body;
 
     const existing = queryGet('SELECT * FROM attendance WHERE user_id = ? AND date = ?', [req.user.id, today]);
@@ -154,7 +165,7 @@ router.get('/all', authenticateToken, (req, res) => {
     }
 
     const { date } = req.query;
-    const targetDate = date || new Date().toISOString().split('T')[0];
+    const targetDate = date || getThaiNow().date;
 
     const records = queryAll(`
       SELECT a.*, u.name, u.employee_id, u.department
@@ -174,8 +185,9 @@ router.get('/all', authenticateToken, (req, res) => {
 router.get('/summary', authenticateToken, (req, res) => {
   try {
     const { month, year } = req.query;
-    const currentMonth = month || String(new Date().getMonth() + 1).padStart(2, '0');
-    const currentYear = year || String(new Date().getFullYear());
+    const thai = getThaiNow();
+    const currentMonth = month || String(parseInt(thai.date.split('-')[1])).padStart(2, '0');
+    const currentYear = year || thai.date.split('-')[0];
     const datePattern = `${currentYear}-${currentMonth}%`;
 
     const userId = req.user.role === 'admin' && req.query.user_id ? req.query.user_id : req.user.id;
