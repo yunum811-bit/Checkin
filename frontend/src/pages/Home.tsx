@@ -64,8 +64,17 @@ export default function Home() {
     setShowCamera('checkout');
   };
 
-  const handlePhotoCaptured = async (photoBase64: string) => {
+  const [pendingPhoto, setPendingPhoto] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<'checkin' | 'checkout' | null>(null);
+
+  const handlePhotoCaptured = (photoBase64: string) => {
+    setPendingPhoto(photoBase64);
+    setPendingAction(showCamera);
     setShowCamera(null);
+  };
+
+  const handleConfirmSubmit = async () => {
+    if (!pendingPhoto || !pendingAction) return;
     setLoading(true);
 
     try {
@@ -79,12 +88,12 @@ export default function Home() {
         } catch { /* Location not available */ }
       }
 
-      if (showCamera === 'checkin') {
-        const res = await api.post('/attendance/checkin', { location, photo: photoBase64 });
+      if (pendingAction === 'checkin') {
+        const res = await api.post('/attendance/checkin', { location, photo: pendingPhoto });
         setTodayRecord(res.data.record);
         setToast({ message: 'เช็คอินสำเร็จ! 🎉', type: 'success' });
       } else {
-        const res = await api.post('/attendance/checkout', { location, photo: photoBase64 });
+        const res = await api.post('/attendance/checkout', { location, photo: pendingPhoto });
         setTodayRecord(res.data.record);
         setToast({ message: 'เช็คเอาท์สำเร็จ! 👋', type: 'success' });
       }
@@ -93,7 +102,20 @@ export default function Home() {
       setToast({ message: err.response?.data?.error || 'เกิดข้อผิดพลาด', type: 'error' });
     } finally {
       setLoading(false);
+      setPendingPhoto(null);
+      setPendingAction(null);
     }
+  };
+
+  const handleCancelConfirm = () => {
+    setPendingPhoto(null);
+    setPendingAction(null);
+  };
+
+  const handleRetakePhoto = () => {
+    setPendingPhoto(null);
+    setShowCamera(pendingAction);
+    setPendingAction(null);
   };
 
   const handleCameraCancel = () => {
@@ -122,6 +144,69 @@ export default function Home() {
       {/* Camera Overlay */}
       {showCamera && (
         <CameraCapture onCapture={handlePhotoCaptured} onCancel={handleCameraCancel} />
+      )}
+
+      {/* Confirmation Modal */}
+      {pendingPhoto && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 9998,
+          background: 'rgba(0,0,0,0.85)', display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center', padding: '20px'
+        }}>
+          <div style={{ 
+            background: 'white', borderRadius: '20px', padding: '24px', 
+            maxWidth: '360px', width: '100%', textAlign: 'center'
+          }}>
+            <h3 style={{ fontSize: '1.1rem', fontWeight: '700', marginBottom: '4px' }}>
+              {pendingAction === 'checkin' ? '📸 ยืนยันเช็คอิน' : '📸 ยืนยันเช็คเอาท์'}
+            </h3>
+            <p style={{ fontSize: '0.8rem', color: 'var(--gray-500)', marginBottom: '16px' }}>
+              ตรวจสอบรูปถ่ายก่อนยืนยัน
+            </p>
+
+            {/* Photo Preview */}
+            <img 
+              src={pendingPhoto} 
+              alt="Preview" 
+              style={{ 
+                width: '100%', height: '200px', objectFit: 'cover', 
+                borderRadius: '12px', marginBottom: '20px',
+                border: '3px solid var(--gray-200)'
+              }} 
+            />
+
+            {/* Buttons */}
+            <button 
+              onClick={handleConfirmSubmit} 
+              disabled={loading}
+              className="btn btn-success" 
+              style={{ marginBottom: '10px', fontSize: '1rem' }}
+            >
+              {loading ? 'กำลังบันทึก...' : (pendingAction === 'checkin' ? '✅ ยืนยันเช็คอิน' : '✅ ยืนยันเช็คเอาท์')}
+            </button>
+
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button 
+                onClick={handleRetakePhoto} 
+                className="btn btn-outline" 
+                style={{ flex: 1, padding: '10px', fontSize: '0.85rem' }}
+                disabled={loading}
+              >
+                📷 ถ่ายใหม่
+              </button>
+              <button 
+                onClick={handleCancelConfirm} 
+                style={{ 
+                  flex: 1, padding: '10px', fontSize: '0.85rem', borderRadius: '10px',
+                  background: 'var(--gray-100)', color: 'var(--gray-600)', fontWeight: '600'
+                }}
+                disabled={loading}
+              >
+                ยกเลิก
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Header */}
