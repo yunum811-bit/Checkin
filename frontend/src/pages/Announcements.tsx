@@ -1,0 +1,251 @@
+import React, { useState, useEffect } from 'react';
+import api from '../api';
+import Toast from '../components/Toast';
+import { useAuth } from '../context/AuthContext';
+import { Megaphone, Plus, X, Pin, Edit2, Trash2, AlertTriangle, Info, Bell } from 'lucide-react';
+
+interface Announcement {
+  id: number;
+  title: string;
+  content: string;
+  priority: string;
+  pinned: number;
+  created_by: number;
+  author_name: string;
+  created_at: string;
+}
+
+export default function Announcements() {
+  const { user } = useAuth();
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+
+  // Form
+  const [title, setTitle] = useState('');
+  const [content, setContent] = useState('');
+  const [priority, setPriority] = useState('normal');
+  const [pinned, setPinned] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  const canCreate = user?.role === 'admin' || user?.role === 'manager';
+
+  useEffect(() => {
+    fetchAnnouncements();
+  }, []);
+
+  const fetchAnnouncements = async () => {
+    try {
+      const res = await api.get('/announcements');
+      setAnnouncements(res.data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const resetForm = () => {
+    setTitle('');
+    setContent('');
+    setPriority('normal');
+    setPinned(false);
+    setEditingId(null);
+    setShowForm(false);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true);
+    try {
+      if (editingId) {
+        await api.put(`/announcements/${editingId}`, { title, content, priority, pinned });
+        setToast({ message: 'อัปเดตประกาศสำเร็จ', type: 'success' });
+      } else {
+        await api.post('/announcements', { title, content, priority, pinned });
+        setToast({ message: 'สร้างประกาศสำเร็จ', type: 'success' });
+      }
+      resetForm();
+      fetchAnnouncements();
+    } catch (err: any) {
+      setToast({ message: err.response?.data?.error || 'เกิดข้อผิดพลาด', type: 'error' });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleEdit = (a: Announcement) => {
+    setTitle(a.title);
+    setContent(a.content);
+    setPriority(a.priority);
+    setPinned(!!a.pinned);
+    setEditingId(a.id);
+    setShowForm(true);
+  };
+
+  const handleDelete = async (id: number) => {
+    if (!confirm('ต้องการลบประกาศนี้?')) return;
+    try {
+      await api.delete(`/announcements/${id}`);
+      setToast({ message: 'ลบประกาศสำเร็จ', type: 'success' });
+      fetchAnnouncements();
+    } catch (err: any) {
+      setToast({ message: err.response?.data?.error || 'เกิดข้อผิดพลาด', type: 'error' });
+    }
+  };
+
+  const getPriorityStyle = (p: string) => {
+    switch (p) {
+      case 'urgent': return { bg: '#FEE2E2', border: '#FECACA', icon: <AlertTriangle size={16} color="#DC2626" />, label: 'ด่วน' };
+      case 'important': return { bg: '#FEF3C7', border: '#FDE68A', icon: <Bell size={16} color="#D97706" />, label: 'สำคัญ' };
+      default: return { bg: '#F0FDF4', border: '#BBF7D0', icon: <Info size={16} color="#16A34A" />, label: 'ทั่วไป' };
+    }
+  };
+
+  const timeAgo = (dateStr: string) => {
+    const now = new Date();
+    const date = new Date(dateStr);
+    const diff = Math.floor((now.getTime() - date.getTime()) / 1000);
+    if (diff < 60) return 'เมื่อสักครู่';
+    if (diff < 3600) return `${Math.floor(diff / 60)} นาทีที่แล้ว`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)} ชั่วโมงที่แล้ว`;
+    if (diff < 604800) return `${Math.floor(diff / 86400)} วันที่แล้ว`;
+    return date.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' });
+  };
+
+  return (
+    <div className="page page-content">
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+
+      <div className="header">
+        <h1><Megaphone size={22} style={{ verticalAlign: 'middle', marginRight: '8px' }} />ประกาศข่าวสาร</h1>
+      </div>
+
+      <div className="container" style={{ marginTop: '20px' }}>
+        {/* Create Button */}
+        {canCreate && (
+          <button
+            className="btn btn-primary"
+            onClick={() => { if (showForm) resetForm(); else setShowForm(true); }}
+            style={{ marginBottom: '16px' }}
+          >
+            {showForm ? <X size={18} /> : <Plus size={18} />}
+            {showForm ? 'ยกเลิก' : 'สร้างประกาศใหม่'}
+          </button>
+        )}
+
+        {/* Create/Edit Form */}
+        {showForm && (
+          <form onSubmit={handleSubmit} className="card" style={{ border: '2px solid var(--primary)' }}>
+            <h3 style={{ fontSize: '1rem', fontWeight: '700', marginBottom: '16px' }}>
+              {editingId ? 'แก้ไขประกาศ' : 'สร้างประกาศใหม่'}
+            </h3>
+
+            <div className="input-group">
+              <label>หัวข้อ</label>
+              <input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="หัวข้อประกาศ"
+                required
+              />
+            </div>
+
+            <div className="input-group">
+              <label>เนื้อหา</label>
+              <textarea
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                placeholder="รายละเอียดประกาศ..."
+                rows={4}
+                required
+                style={{ resize: 'vertical' }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
+              <div className="input-group" style={{ flex: 1, marginBottom: 0 }}>
+                <label>ความสำคัญ</label>
+                <select value={priority} onChange={(e) => setPriority(e.target.value)}>
+                  <option value="normal">ทั่วไป</option>
+                  <option value="important">สำคัญ</option>
+                  <option value="urgent">ด่วน</option>
+                </select>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: '4px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '0.85rem' }}>
+                  <input
+                    type="checkbox"
+                    checked={pinned}
+                    onChange={(e) => setPinned(e.target.checked)}
+                    style={{ width: '18px', height: '18px', accentColor: 'var(--primary)' }}
+                  />
+                  <Pin size={14} /> ปักหมุด
+                </label>
+              </div>
+            </div>
+
+            <button type="submit" className="btn btn-success" disabled={submitting}>
+              {submitting ? 'กำลังบันทึก...' : (editingId ? 'อัปเดต' : 'เผยแพร่ประกาศ')}
+            </button>
+          </form>
+        )}
+
+        {/* Announcements List */}
+        {loading ? (
+          <div className="card" style={{ textAlign: 'center', color: 'var(--gray-400)' }}>กำลังโหลด...</div>
+        ) : announcements.length === 0 ? (
+          <div className="card" style={{ textAlign: 'center', padding: '40px 20px' }}>
+            <div style={{ fontSize: '3rem', marginBottom: '8px' }}>📢</div>
+            <div style={{ color: 'var(--gray-400)', fontWeight: '500' }}>ยังไม่มีประกาศ</div>
+          </div>
+        ) : (
+          announcements.map((a) => {
+            const pStyle = getPriorityStyle(a.priority);
+            return (
+              <div key={a.id} className="card" style={{ 
+                padding: '16px', borderLeft: `4px solid ${pStyle.border}`,
+                background: a.pinned ? pStyle.bg : 'white'
+              }}>
+                {/* Header */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
+                    {a.pinned ? <Pin size={14} color="var(--primary)" /> : null}
+                    {pStyle.icon}
+                    <span style={{ fontWeight: '700', fontSize: '0.95rem', color: 'var(--gray-800)' }}>
+                      {a.title}
+                    </span>
+                  </div>
+                  {/* Actions */}
+                  {(user?.role === 'admin' || a.created_by === user?.id) && (
+                    <div style={{ display: 'flex', gap: '4px' }}>
+                      <button onClick={() => handleEdit(a)} style={{ background: 'none', padding: '4px', color: 'var(--primary)' }}>
+                        <Edit2 size={14} />
+                      </button>
+                      <button onClick={() => handleDelete(a.id)} style={{ background: 'none', padding: '4px', color: 'var(--danger)' }}>
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Content */}
+                <div style={{ fontSize: '0.85rem', color: 'var(--gray-700)', lineHeight: 1.6, whiteSpace: 'pre-wrap', marginBottom: '10px' }}>
+                  {a.content}
+                </div>
+
+                {/* Footer */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.7rem', color: 'var(--gray-400)' }}>
+                  <span>โดย {a.author_name}</span>
+                  <span>{timeAgo(a.created_at)}</span>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
+}
