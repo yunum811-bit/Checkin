@@ -66,11 +66,24 @@ export default function Home() {
 
   const [pendingPhoto, setPendingPhoto] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<'checkin' | 'checkout' | null>(null);
+  const [pendingLocation, setPendingLocation] = useState<{ lat: number; lng: number } | null>(null);
 
-  const handlePhotoCaptured = (photoBase64: string) => {
+  const handlePhotoCaptured = async (photoBase64: string) => {
     setPendingPhoto(photoBase64);
     setPendingAction(showCamera);
     setShowCamera(null);
+
+    // Get location immediately after photo
+    if (navigator.geolocation) {
+      try {
+        const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000 });
+        });
+        setPendingLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+      } catch {
+        setPendingLocation(null);
+      }
+    }
   };
 
   const handleConfirmSubmit = async () => {
@@ -78,15 +91,7 @@ export default function Home() {
     setLoading(true);
 
     try {
-      let location = '';
-      if (navigator.geolocation) {
-        try {
-          const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
-            navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000 });
-          });
-          location = `${pos.coords.latitude},${pos.coords.longitude}`;
-        } catch { /* Location not available */ }
-      }
+      const location = pendingLocation ? `${pendingLocation.lat},${pendingLocation.lng}` : '';
 
       if (pendingAction === 'checkin') {
         const res = await api.post('/attendance/checkin', { location, photo: pendingPhoto });
@@ -104,16 +109,19 @@ export default function Home() {
       setLoading(false);
       setPendingPhoto(null);
       setPendingAction(null);
+      setPendingLocation(null);
     }
   };
 
   const handleCancelConfirm = () => {
     setPendingPhoto(null);
     setPendingAction(null);
+    setPendingLocation(null);
   };
 
   const handleRetakePhoto = () => {
     setPendingPhoto(null);
+    setPendingLocation(null);
     setShowCamera(pendingAction);
     setPendingAction(null);
   };
@@ -151,17 +159,19 @@ export default function Home() {
         <div style={{
           position: 'fixed', inset: 0, zIndex: 9998,
           background: 'rgba(0,0,0,0.85)', display: 'flex', flexDirection: 'column',
-          alignItems: 'center', justifyContent: 'center', padding: '20px'
+          alignItems: 'center', justifyContent: 'center', padding: '16px',
+          overflow: 'auto'
         }}>
           <div style={{ 
-            background: 'white', borderRadius: '20px', padding: '24px', 
-            maxWidth: '360px', width: '100%', textAlign: 'center'
+            background: 'white', borderRadius: '20px', padding: '20px', 
+            maxWidth: '380px', width: '100%', textAlign: 'center',
+            maxHeight: '90vh', overflow: 'auto'
           }}>
             <h3 style={{ fontSize: '1.1rem', fontWeight: '700', marginBottom: '4px' }}>
               {pendingAction === 'checkin' ? '📸 ยืนยันเช็คอิน' : '📸 ยืนยันเช็คเอาท์'}
             </h3>
-            <p style={{ fontSize: '0.8rem', color: 'var(--gray-500)', marginBottom: '16px' }}>
-              ตรวจสอบรูปถ่ายก่อนยืนยัน
+            <p style={{ fontSize: '0.8rem', color: 'var(--gray-500)', marginBottom: '12px' }}>
+              ตรวจสอบข้อมูลก่อนยืนยัน
             </p>
 
             {/* Photo Preview */}
@@ -169,11 +179,57 @@ export default function Home() {
               src={pendingPhoto} 
               alt="Preview" 
               style={{ 
-                width: '100%', height: '200px', objectFit: 'cover', 
-                borderRadius: '12px', marginBottom: '20px',
+                width: '100%', height: '180px', objectFit: 'cover', 
+                borderRadius: '12px', marginBottom: '12px',
                 border: '3px solid var(--gray-200)'
               }} 
             />
+
+            {/* Time Display */}
+            <div style={{ 
+              padding: '10px', background: 'var(--gray-50)', borderRadius: '10px', 
+              marginBottom: '12px', border: '1px solid var(--gray-200)'
+            }}>
+              <div style={{ fontSize: '0.7rem', color: 'var(--gray-500)', fontWeight: '600', textTransform: 'uppercase' }}>เวลาปัจจุบัน</div>
+              <div style={{ fontSize: '1.3rem', fontWeight: '800', color: 'var(--primary)' }}>
+                {currentTime.toLocaleTimeString('th-TH', { hour12: false, timeZone: 'Asia/Bangkok' })}
+              </div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--gray-500)' }}>
+                {currentTime.toLocaleDateString('th-TH', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Bangkok' })}
+              </div>
+            </div>
+
+            {/* Map Preview */}
+            {pendingLocation && (
+              <div style={{ marginBottom: '12px', borderRadius: '10px', overflow: 'hidden', border: '1px solid var(--gray-200)' }}>
+                <img
+                  src={`https://maps.googleapis.com/maps/api/staticmap?center=${pendingLocation.lat},${pendingLocation.lng}&zoom=16&size=360x150&markers=color:red%7C${pendingLocation.lat},${pendingLocation.lng}&key=`}
+                  alt="Location"
+                  style={{ width: '100%', height: '100px', objectFit: 'cover', display: 'none' }}
+                />
+                <div style={{ padding: '10px', background: 'var(--gray-50)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '1.2rem' }}>📍</span>
+                  <div style={{ textAlign: 'left' }}>
+                    <div style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--gray-700)' }}>ตำแหน่งปัจจุบัน</div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--gray-400)' }}>
+                      {pendingLocation.lat.toFixed(6)}, {pendingLocation.lng.toFixed(6)}
+                    </div>
+                  </div>
+                  <a 
+                    href={`https://www.google.com/maps?q=${pendingLocation.lat},${pendingLocation.lng}`}
+                    target="_blank" rel="noopener noreferrer"
+                    style={{ marginLeft: 'auto', fontSize: '0.7rem', color: 'var(--primary)', fontWeight: '600' }}
+                  >
+                    ดูแผนที่
+                  </a>
+                </div>
+              </div>
+            )}
+            {!pendingLocation && (
+              <div style={{ padding: '10px', background: '#FEF3C7', borderRadius: '10px', marginBottom: '12px', fontSize: '0.75rem', color: '#92400E' }}>
+                ⚠️ ไม่สามารถระบุตำแหน่งได้ กรุณาเปิด GPS
+              </div>
+            )}
 
             {/* Buttons */}
             <button 

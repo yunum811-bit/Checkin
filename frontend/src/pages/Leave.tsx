@@ -3,6 +3,7 @@ import api from '../api';
 import Toast from '../components/Toast';
 import ExportButtons from '../components/ExportButtons';
 import { exportLeaves } from '../utils/exportData';
+import { useAuth } from '../context/AuthContext';
 import { Calendar, Plus, X, CheckCircle, Clock, XCircle, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface Approval {
@@ -44,6 +45,7 @@ interface ApprovalChain {
 }
 
 export default function Leave() {
+  const { user } = useAuth();
   const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
   const [balance, setBalance] = useState<LeaveBalance[]>([]);
   const [chain, setChain] = useState<ApprovalChain[]>([]);
@@ -58,6 +60,10 @@ export default function Leave() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [reason, setReason] = useState('');
+  const [leaveDuration, setLeaveDuration] = useState<'full' | 'half' | 'hours'>('full');
+  const [leaveHours, setLeaveHours] = useState(1);
+  const [leavePhoto, setLeavePhoto] = useState<string>('');
+  const [leavePhotoName, setLeavePhotoName] = useState<string>('');
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -115,8 +121,11 @@ export default function Leave() {
       await api.post('/leaves', {
         leave_type: leaveType,
         start_date: startDate,
-        end_date: endDate,
-        reason
+        end_date: leaveDuration === 'full' ? endDate : startDate,
+        reason,
+        duration: leaveDuration,
+        hours: leaveDuration === 'hours' ? leaveHours : undefined,
+        photo: leavePhoto || undefined
       });
       setToast({ message: 'ส่งคำขอลาสำเร็จ', type: 'success' });
       setShowForm(false);
@@ -124,6 +133,10 @@ export default function Leave() {
       setStartDate('');
       setEndDate('');
       setReason('');
+      setLeaveDuration('full');
+      setLeaveHours(1);
+      setLeavePhoto('');
+      setLeavePhotoName('');
       fetchLeaves();
       fetchBalance();
     } catch (err: any) {
@@ -133,14 +146,23 @@ export default function Leave() {
     }
   };
 
+  const [showCancelConfirm, setShowCancelConfirm] = useState<number | null>(null);
+
   const handleCancel = async (id: number) => {
+    setShowCancelConfirm(id);
+  };
+
+  const confirmCancel = async () => {
+    if (!showCancelConfirm) return;
     try {
-      await api.delete(`/leaves/${id}`);
+      await api.delete(`/leaves/${showCancelConfirm}`);
       setToast({ message: 'ยกเลิกคำขอลาสำเร็จ', type: 'success' });
       fetchLeaves();
       fetchBalance();
     } catch (err: any) {
       setToast({ message: err.response?.data?.error || 'เกิดข้อผิดพลาด', type: 'error' });
+    } finally {
+      setShowCancelConfirm(null);
     }
   };
 
@@ -203,8 +225,8 @@ export default function Leave() {
           </div>
         </div>
 
-        {/* Approval Chain Info */}
-        {chain.length > 0 && (
+        {/* Approval Chain Info - show only for managers/admin */}
+        {chain.length > 0 && (user?.role === 'admin' || user?.role === 'md' || user?.role === 'manager') && (
           <div className="card" style={{ padding: '14px' }}>
             <h3 style={{ fontSize: '0.85rem', fontWeight: '600', marginBottom: '8px', color: 'var(--gray-600)' }}>
               🔗 ลำดับการอนุมัติของคุณ
@@ -250,10 +272,45 @@ export default function Leave() {
               <input id="startDate" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} required />
             </div>
 
+            {leaveDuration === 'full' && (
+              <div className="input-group">
+                <label htmlFor="endDate">วันที่สิ้นสุด</label>
+                <input id="endDate" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} required />
+              </div>
+            )}
+
+            {/* Duration Type */}
             <div className="input-group">
-              <label htmlFor="endDate">วันที่สิ้นสุด</label>
-              <input id="endDate" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} required />
+              <label>ระยะเวลา</label>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                {[
+                  { value: 'full', label: 'เต็มวัน' },
+                  { value: 'half', label: 'ครึ่งวัน' },
+                  { value: 'hours', label: 'รายชั่วโมง' }
+                ].map(opt => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setLeaveDuration(opt.value as any)}
+                    style={{
+                      flex: 1, padding: '10px', borderRadius: '8px', fontSize: '0.8rem', fontWeight: '600',
+                      background: leaveDuration === opt.value ? 'var(--primary)' : 'var(--gray-100)',
+                      color: leaveDuration === opt.value ? 'white' : 'var(--gray-600)',
+                      border: leaveDuration === opt.value ? 'none' : '1px solid var(--gray-200)'
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
             </div>
+
+            {leaveDuration === 'hours' && (
+              <div className="input-group">
+                <label>จำนวนชั่วโมง</label>
+                <input type="number" min={1} max={7} value={leaveHours} onChange={(e) => setLeaveHours(parseInt(e.target.value) || 1)} />
+              </div>
+            )}
 
             <div className="input-group">
               <label htmlFor="reason">เหตุผล</label>
@@ -265,6 +322,32 @@ export default function Leave() {
                 rows={3}
                 style={{ resize: 'vertical' }}
               />
+            </div>
+
+            {/* Attach Photo */}
+            <div className="input-group">
+              <label>แนบรูปภาพ (ใบรับรองแพทย์ ฯลฯ)</label>
+              {leavePhotoName ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px', background: 'var(--gray-50)', borderRadius: '8px', border: '1px solid var(--gray-200)' }}>
+                  <span>🖼️</span>
+                  <span style={{ flex: 1, fontSize: '0.8rem' }}>{leavePhotoName}</span>
+                  <button type="button" onClick={() => { setLeavePhoto(''); setLeavePhotoName(''); }} style={{ background: 'none', color: 'var(--danger)', padding: '4px' }}>✕</button>
+                </div>
+              ) : (
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    if (file.size > 5 * 1024 * 1024) { setToast({ message: 'ไฟล์ต้องไม่เกิน 5MB', type: 'error' }); return; }
+                    const reader = new FileReader();
+                    reader.onload = (ev) => { setLeavePhoto(ev.target?.result as string); setLeavePhotoName(file.name); };
+                    reader.readAsDataURL(file);
+                  }}
+                  style={{ padding: '10px', border: '1px dashed var(--gray-300)', borderRadius: '8px', width: '100%' }}
+                />
+              )}
             </div>
 
             <button type="submit" className="btn btn-success" disabled={submitting}>
@@ -365,6 +448,31 @@ export default function Leave() {
           ))
         )}
       </div>
+
+      {/* Cancel Confirmation Popup */}
+      {showCancelConfirm && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 9999,
+          background: 'rgba(0,0,0,0.6)', display: 'flex',
+          alignItems: 'center', justifyContent: 'center', padding: '20px'
+        }}>
+          <div style={{ background: 'white', borderRadius: '16px', padding: '24px', maxWidth: '320px', width: '100%', textAlign: 'center' }}>
+            <div style={{ fontSize: '2.5rem', marginBottom: '12px' }}>⚠️</div>
+            <h3 style={{ fontSize: '1rem', fontWeight: '700', marginBottom: '8px' }}>ยืนยันการยกเลิก</h3>
+            <p style={{ fontSize: '0.85rem', color: 'var(--gray-500)', marginBottom: '20px' }}>
+              ต้องการยกเลิกคำขอลานี้ใช่หรือไม่?<br/>การยกเลิกจะไม่สามารถกู้คืนได้
+            </p>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button onClick={confirmCancel} className="btn btn-danger" style={{ flex: 1, padding: '12px' }}>
+                ยืนยันยกเลิก
+              </button>
+              <button onClick={() => setShowCancelConfirm(null)} className="btn btn-outline" style={{ flex: 1, padding: '12px' }}>
+                ไม่ยกเลิก
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
