@@ -351,22 +351,20 @@ export default function Leave() {
                   </div>
                 </div>
               ) : (
-                <button
-                  type="button"
-                  onClick={() => setShowLeaveCamera(true)}
-                  style={{
-                    width: '100%', padding: '14px', border: '2px dashed var(--gray-300)',
-                    borderRadius: '10px', background: 'var(--gray-50)', color: 'var(--gray-600)',
-                    fontSize: '0.85rem', fontWeight: '600', display: 'flex', alignItems: 'center',
-                    justifyContent: 'center', gap: '8px', cursor: 'pointer'
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    if (file.size > 5 * 1024 * 1024) { setToast({ message: 'ไฟล์ต้องไม่เกิน 5MB', type: 'error' }); return; }
+                    const reader = new FileReader();
+                    reader.onload = (ev) => { setLeavePhoto(ev.target?.result as string); setLeavePhotoName(file.name); };
+                    reader.readAsDataURL(file);
                   }}
-                >
-                  📷 ถ่ายรูปแนบ
-                </button>
+                  style={{ padding: '10px', border: '1px dashed var(--gray-300)', borderRadius: '8px', width: '100%' }}
+                />
               )}
-              <div style={{ fontSize: '0.7rem', color: 'var(--gray-400)', marginTop: '4px' }}>
-                * ถ่ายรูปจากกล้องเท่านั้น ไม่สามารถเลือกจากแกลเลอรีได้
-              </div>
             </div>
 
             <button type="submit" className="btn btn-success" disabled={submitting}>
