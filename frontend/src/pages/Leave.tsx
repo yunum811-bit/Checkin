@@ -324,7 +324,7 @@ export default function Leave() {
               />
             </div>
 
-            {/* Attach Photo */}
+            {/* Attach Photo - Camera only */}
             <div className="input-group">
               <label>แนบรูปภาพ (ใบรับรองแพทย์ ฯลฯ)</label>
               {leavePhotoName ? (
@@ -337,6 +337,7 @@ export default function Leave() {
                 <input
                   type="file"
                   accept="image/*"
+                  capture="environment"
                   onChange={(e) => {
                     const file = e.target.files?.[0];
                     if (!file) return;
@@ -348,6 +349,9 @@ export default function Leave() {
                   style={{ padding: '10px', border: '1px dashed var(--gray-300)', borderRadius: '8px', width: '100%' }}
                 />
               )}
+              <div style={{ fontSize: '0.7rem', color: 'var(--gray-400)', marginTop: '4px' }}>
+                * ถ่ายรูปจากกล้องเท่านั้น ไม่สามารถเลือกจากแกลเลอรีได้
+              </div>
             </div>
 
             <button type="submit" className="btn btn-success" disabled={submitting}>
