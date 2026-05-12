@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import api from '../api';
 import Toast from '../components/Toast';
 import ExportButtons from '../components/ExportButtons';
+import CameraCapture from '../components/CameraCapture';
 import { exportLeaves } from '../utils/exportData';
 import { useAuth } from '../context/AuthContext';
 import { Calendar, Plus, X, CheckCircle, Clock, XCircle, ChevronDown, ChevronUp } from 'lucide-react';
@@ -64,6 +65,7 @@ export default function Leave() {
   const [leaveHours, setLeaveHours] = useState(1);
   const [leavePhoto, setLeavePhoto] = useState<string>('');
   const [leavePhotoName, setLeavePhotoName] = useState<string>('');
+  const [showLeaveCamera, setShowLeaveCamera] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -205,6 +207,18 @@ export default function Leave() {
     <div className="page page-content">
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
 
+      {/* Camera for leave attachment */}
+      {showLeaveCamera && (
+        <CameraCapture
+          onCapture={(photo) => {
+            setLeavePhoto(photo);
+            setLeavePhotoName(`leave_photo_${Date.now()}.jpg`);
+            setShowLeaveCamera(false);
+          }}
+          onCancel={() => setShowLeaveCamera(false)}
+        />
+      )}
+
       <div className="header">
         <h1><Calendar size={22} style={{ verticalAlign: 'middle', marginRight: '8px' }} />ลางาน</h1>
       </div>
@@ -324,30 +338,35 @@ export default function Leave() {
               />
             </div>
 
-            {/* Attach Photo */}
+            {/* Attach Photo - Camera only */}
             <div className="input-group">
               <label>แนบรูปภาพ (ใบรับรองแพทย์ ฯลฯ)</label>
               {leavePhotoName ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px', background: 'var(--gray-50)', borderRadius: '8px', border: '1px solid var(--gray-200)' }}>
-                  <span>🖼️</span>
-                  <span style={{ flex: 1, fontSize: '0.8rem' }}>{leavePhotoName}</span>
-                  <button type="button" onClick={() => { setLeavePhoto(''); setLeavePhotoName(''); }} style={{ background: 'none', color: 'var(--danger)', padding: '4px' }}>✕</button>
+                <div>
+                  <img src={leavePhoto} alt="preview" style={{ width: '100%', maxHeight: '150px', objectFit: 'cover', borderRadius: '8px', marginBottom: '8px' }} />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px', background: 'var(--gray-50)', borderRadius: '8px', border: '1px solid var(--gray-200)' }}>
+                    <span>🖼️</span>
+                    <span style={{ flex: 1, fontSize: '0.8rem' }}>{leavePhotoName}</span>
+                    <button type="button" onClick={() => { setLeavePhoto(''); setLeavePhotoName(''); }} style={{ background: 'none', color: 'var(--danger)', padding: '4px' }}>✕</button>
+                  </div>
                 </div>
               ) : (
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (!file) return;
-                    if (file.size > 5 * 1024 * 1024) { setToast({ message: 'ไฟล์ต้องไม่เกิน 5MB', type: 'error' }); return; }
-                    const reader = new FileReader();
-                    reader.onload = (ev) => { setLeavePhoto(ev.target?.result as string); setLeavePhotoName(file.name); };
-                    reader.readAsDataURL(file);
+                <button
+                  type="button"
+                  onClick={() => setShowLeaveCamera(true)}
+                  style={{
+                    width: '100%', padding: '14px', border: '2px dashed var(--gray-300)',
+                    borderRadius: '10px', background: 'var(--gray-50)', color: 'var(--gray-600)',
+                    fontSize: '0.85rem', fontWeight: '600', display: 'flex', alignItems: 'center',
+                    justifyContent: 'center', gap: '8px', cursor: 'pointer'
                   }}
-                  style={{ padding: '10px', border: '1px dashed var(--gray-300)', borderRadius: '8px', width: '100%' }}
-                />
+                >
+                  📷 ถ่ายรูปแนบ
+                </button>
               )}
+              <div style={{ fontSize: '0.7rem', color: 'var(--gray-400)', marginTop: '4px' }}>
+                * ถ่ายรูปจากกล้องเท่านั้น ไม่สามารถเลือกจากแกลเลอรีได้
+              </div>
             </div>
 
             <button type="submit" className="btn btn-success" disabled={submitting}>
